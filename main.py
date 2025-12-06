@@ -7,8 +7,10 @@ import os
 import sqlite3
 import jwt  # PyJWT
 
-app = FastAPI()
+# Import your custom verification module
+from human_verification import run_human_verification
 
+app = FastAPI()
 
 @app.get("/")
 def root():
@@ -17,6 +19,7 @@ def root():
         "status": "running",
         "version": "v1",
         "endpoints": {
+            "verify_live": "POST /v1/verify-live",
             "verify": "POST /v1/verify",
             "validate_device_token": "GET /v1/device-token/{token}",
             "revoke_device": "POST /v1/revoke-device"
@@ -37,32 +40,53 @@ c.execute('''CREATE TABLE IF NOT EXISTS devices (
             )''')
 conn.commit()
 
-# --- POST /v1/verify ---
+
+# --------------------------------------------------------------
+# ✅ NEW: LIVE VERIFICATION ENDPOINT
+# --------------------------------------------------------------
+@app.post("/v1/verify-live")
+def verify_live():
+    result = run_human_verification()
+
+    return {
+        "verified": result["challenge_passed"],
+        "liveness_score": result["liveness_score"],
+        "lip_sync_score": result["lip_sync_score"],
+        "details": result
+    }
+
+
+# --------------------------------------------------------------
+# EXISTING DEVICE-VERIFICATION ENDPOINT
+# --------------------------------------------------------------
 @app.post("/v1/verify")
 def verify(video: UploadFile = File(...), audio: UploadFile = File(...), device_id: str = Form(...)):
     # Save uploaded files temporarily
     video_path = f"{UPLOAD_DIR}/{uuid4()}_{video.filename}"
     with open(video_path, "wb") as f:
         f.write(video.file.read())
+
     audio_path = f"{UPLOAD_DIR}/{uuid4()}_{audio.filename}"
     with open(audio_path, "wb") as f:
         f.write(audio.file.read())
     
     # --- Simulated Human Verification ---
-    liveness_score = 0.95      # dummy score for prototype
-    lip_sync_score = 0.92      # dummy score
+    liveness_score = 0.95
+    lip_sync_score = 0.92
     challenge_passed = True
     replay_flag = False
     
     # --- Simulated DeviceTrust Module ---
-    device_trust_score = 0.97  # assume device safe
+    device_trust_score = 0.97
     
     # --- Fusion Engine ---
-    verified = (liveness_score >= 0.8 and
-                lip_sync_score >= 0.8 and
-                challenge_passed and
-                not replay_flag and
-                device_trust_score >= 0.75)
+    verified = (
+        liveness_score >= 0.8 and
+        lip_sync_score >= 0.8 and
+        challenge_passed and
+        not replay_flag and
+        device_trust_score >= 0.75
+    )
     
     # --- Trusted Device Token ---
     if verified:
@@ -74,6 +98,7 @@ def verify(video: UploadFile = File(...), audio: UploadFile = File(...), device_
             "verified": True,
             "timestamp_utc": datetime.utcnow().isoformat()
         }
+
         trusted_device_token = jwt.encode(token_payload, SECRET_KEY, algorithm="HS256")
         
         # Store token in DB
@@ -97,7 +122,10 @@ def verify(video: UploadFile = File(...), audio: UploadFile = File(...), device_
         }
     }
 
-# --- GET /v1/device-token/{token} ---
+
+# --------------------------------------------------------------
+# VALIDATE DEVICE TOKEN
+# --------------------------------------------------------------
 @app.get("/v1/device-token/{token}")
 def validate_token(token: str):
     try:
@@ -108,14 +136,20 @@ def validate_token(token: str):
     except jwt.InvalidTokenError:
         return {"valid": False, "reason": "Invalid token"}
 
-# --- Optional Admin Endpoint: Revoke Device ---
+
+# --------------------------------------------------------------
+# REVOKE DEVICE TOKEN
+# --------------------------------------------------------------
 @app.post("/v1/revoke-device")
 def revoke_device(token: str = Form(...)):
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
         token_id = payload.get("token_id")
+
         c.execute("DELETE FROM devices WHERE token_id=?", (token_id,))
         conn.commit()
+
         return {"revoked": True, "token_id": token_id}
+
     except Exception as e:
         return {"revoked": False, "error": str(e)}
