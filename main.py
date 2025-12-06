@@ -8,6 +8,21 @@ import sqlite3
 import jwt  # PyJWT
 
 app = FastAPI()
+
+
+@app.get("/")
+def root():
+    return {
+        "service": "Certivo V1 Prototype",
+        "status": "running",
+        "version": "v1",
+        "endpoints": {
+            "verify": "POST /v1/verify",
+            "validate_device_token": "GET /v1/device-token/{token}",
+            "revoke_device": "POST /v1/revoke-device"
+        }
+    }
+
 SECRET_KEY = "certivo-secret-key"
 UPLOAD_DIR = "./uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
