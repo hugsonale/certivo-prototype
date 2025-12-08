@@ -45,30 +45,22 @@ conn.commit()
 # ✅ NEW: LIVE VERIFICATION ENDPOINT
 # --------------------------------------------------------------
 @app.post("/v1/verify-live")
-async def verify_live(
-    video: UploadFile = File(...),
-    audio: UploadFile = File(...),
-    device_id: str = Form(...)
-):
-
-    # Save uploaded files temporarily
+def verify_live(video: UploadFile = File(...), audio: UploadFile = File(...)):
+    # Save files
     video_path = f"{UPLOAD_DIR}/{uuid4()}_{video.filename}"
     with open(video_path, "wb") as f:
         f.write(video.file.read())
 
-    audio_path = f"{UPLOAD_DIR}/{uuid4()}_{audio.filename}"
-    with open(audio_path, "wb") as f:
-        f.write(audio.file.read())
-
-    # Call human verification (fake scores for now)
-    result = run_human_verification(video_path, audio_path)
+    # Run REAL ML verification
+    result = run_real_human_verification(video_path)
 
     return {
-        "verified": result.get("challenge_passed", False),
-        "liveness_score": result.get("liveness_score", 0.0),
-        "lip_sync_score": result.get("lip_sync_score", 0.0),
+        "verified": result["challenge_passed"],
+        "liveness_score": result["liveness_score"],
+        "lip_sync_score": result["lip_sync_score"],
         "details": result
     }
+
 
 
 # --------------------------------------------------------------
