@@ -8,7 +8,7 @@ import sqlite3
 import jwt  # PyJWT
 
 # Import your custom verification module
-from human_verification import run_human_verification
+from real_human_verification import run_real_human_verification
 
 app = FastAPI()
 
